@@ -10,8 +10,6 @@ class Cell:
         self.sch_cnt = 0
         self.rb_utilized = 0
         self.tput = 0
-        self.sr_period = 1000
-        self.sr_cnt_slot = 5
 
     def attach_UE(self,serviceType):
         self.ue_list.append(ue.UE(len(self.ue_list),serviceType))
@@ -33,7 +31,7 @@ class Cell:
                 ue = self.ue_list[(self.sch_cnt + schpducnt + searchcnt) % len(self.ue_list)]
                 if ue.traffic > 0:
                     if ue.aloc_rbcnt + cell_sch_rbsize <= self.max_RB:
-                        sched_packetsize, sched_rbsize = ue.allocate()
+                        sched_packetsize, sched_rbsize = ue.allocate(slot)
                         cell_sch_packetsize += sched_packetsize
                         cell_sch_rbsize += sched_rbsize
                         schpducnt += 1
@@ -42,14 +40,8 @@ class Cell:
                 else:
                     searchcnt += 1
 
-            sr_cnt = 0
-            if slot % self.sr_period == 0:
-                for ue in self.ue_list:
-                    if ue.traffic == 0:
-                        ue.scheduling_request()
-                        sr_cnt += 1
-                        if sr_cnt > self.sr_cnt_slot:
-                            break
+        for ue in self.ue_list:
+            ue.scheduling_request(slot)
 
         self.sch_cnt += schpducnt
 

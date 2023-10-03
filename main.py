@@ -40,7 +40,7 @@ class gNodeB:
             cell_rbutil.append(rbutil)
             cell_schedpdu.append(schedpdu)
 
-        return self.gnb_tput, cell_tput, cell_rbutil, sum(cell_schedpdu)
+        return self.gnb_tput, cell_tput, sum(cell_rbutil), sum(cell_schedpdu)
 
 
 gnb = gNodeB(8)
