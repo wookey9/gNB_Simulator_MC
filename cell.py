@@ -1,4 +1,4 @@
-import ue
+from . import ue
 
 class Cell:
     def __init__(self, cellid, maxRb, maxPdu=2):
@@ -50,8 +50,8 @@ class Cell:
 
         return cell_sch_packetsize
 
-    def get_stat(self):
-        return self.rb_utilized, self.tput, self.sch_cnt
+    def get_stat(self, period):
+        return self.rb_utilized * 100 / (period * self.max_RB), self.tput / 1000, self.sch_cnt / 1000
 
     def reset_stat(self):
         self.rb_utilized = 0
