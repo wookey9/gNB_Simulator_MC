@@ -17,7 +17,7 @@ class gNodeB:
         self.episode_size = 10
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 10000
+        self.running_slot = 1000
 
         if os.path.exists('mobilePhoneActivity/input.pkl'):
             self.mobile_activity = pd.read_pickle('mobilePhoneActivity/input.pkl')
@@ -62,7 +62,7 @@ class gNodeB:
             cell_rbutil.append(rbutil)
             cell_schedpdu.append(schedpdu)
 
-        return self.gnb_tput, cell_tput, sum(cell_rbutil), sum(cell_schedpdu)
+        return self.gnb_tput / 100, cell_tput, cell_rbutil, cell_schedpdu
 
     def apply_action(self, action):
         minus_cell = abs(action[0] - 8) - 1
@@ -85,7 +85,8 @@ class gNodeB:
             done = 1
             self.update_env()
             self.episode_cnt += 1
-        return state,gnb_tput / 1000, done
+            self.maxpdu_list = [2,2,2,2,2,2,2,2]
+        return state,gnb_tput , done
 
     def update_env(self):
         if len(self.mobile_activity) > 0:

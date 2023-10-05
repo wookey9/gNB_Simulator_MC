@@ -7,10 +7,10 @@ class UE:
         self.last_schedslot = 0
 
         if type == 0:
-            self.sr_period = 1000
+            self.sr_period = 100
             self.aloc_rbcnt = 8
         else:
-            self.sr_period = 1000
+            self.sr_period = 100
             self.aloc_rbcnt = 66
 
     def allocate(self, slot):
