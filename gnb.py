@@ -87,7 +87,7 @@ class gNodeB:
             done = 1
             self.update_env()
             self.episode_cnt += 1
-            self.maxpdu_list = [2,2,2,2,2,2,2,2]
+            #self.maxpdu_list = [2,2,2,2,2,2,2,2]
         return state,gnb_tput , done
 
     def update_env(self):
