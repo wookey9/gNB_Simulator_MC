@@ -17,7 +17,7 @@ class gNodeB:
         self.episode_size = 10
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 1000
+        self.running_slot = 100
 
         if os.path.exists('mobilePhoneActivity/input.pkl'):
             self.mobile_activity = pd.read_pickle('mobilePhoneActivity/input.pkl')
@@ -30,6 +30,8 @@ class gNodeB:
         else:
             self.mobile_activity = pd.DataFrame({})
 
+    def set_epi_size(self,size):
+        self.episode_size = size
     def run(self, num_slot):
         if not(len(self.ue_dist) == len(self.heavy_dist) == len(self.maxpdu_list) == len(self.cell_list)):
             return -1
@@ -78,7 +80,7 @@ class gNodeB:
     def observe_state(self):
         self.run(self.running_slot)
         gnb_tput, cell_tput, cell_rb, cell_sched_pdu = self.get_stat()
-        state = cell_rb + cell_tput + self.maxpdu_list + cell_sched_pdu + self.heavy_dist
+        state = cell_rb + cell_tput + self.maxpdu_list + self.ue_dist + self.heavy_dist
 
         done = 0
         if self.episode_iter % self.episode_size == 0:

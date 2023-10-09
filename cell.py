@@ -40,8 +40,8 @@ class Cell:
                 else:
                     searchcnt += 1
 
-        for ue in self.ue_list:
-            ue.scheduling_request(slot)
+        '''for ue in self.ue_list:
+            ue.scheduling_request(slot)'''
 
         self.sch_cnt += schpducnt
 
