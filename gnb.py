@@ -14,7 +14,7 @@ class gNodeB:
         for cellId in range(N_Cell):
             self.cell_list.append(cell.Cell(cellId, 66))
 
-        self.episode_size = 20
+        self.episode_size = 25
         self.episode_iter = 0
         self.episode_cnt = 0
         self.running_slot = 100
