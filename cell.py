@@ -29,7 +29,7 @@ class Cell:
         if len(self.ue_list) > 0:
             while schpducnt < self.maxPdu and (schpducnt + searchcnt < len(self.ue_list)):
                 ue = self.ue_list[(self.sch_cnt + schpducnt + searchcnt) % len(self.ue_list)]
-                if ue.traffic > 0:
+                if ue.traffic > 0 and ue.is_sch_time(slot):
                     if ue.aloc_rbcnt + cell_sch_rbsize <= self.max_RB:
                         sched_packetsize, sched_rbsize = ue.allocate(slot)
                         cell_sch_packetsize += sched_packetsize

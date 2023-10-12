@@ -14,7 +14,7 @@ class gNodeB:
         for cellId in range(N_Cell):
             self.cell_list.append(cell.Cell(cellId, 66))
 
-        self.episode_size = 10
+        self.episode_size = 20
         self.episode_iter = 0
         self.episode_cnt = 0
         self.running_slot = 100
@@ -87,7 +87,7 @@ class gNodeB:
             done = 1
             self.update_env()
             self.episode_cnt += 1
-            #self.maxpdu_list = [2,2,2,2,2,2,2,2]
+            self.maxpdu_list = [2,2,2,2,2,2,2,2]
         return state,gnb_tput , done
 
     def update_env(self):

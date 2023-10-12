@@ -3,9 +3,7 @@ class UE:
         self.uid = uid
         self.service_type = type
         self.sched_cnt = 0
-        self.traffic = 0
-        self.last_schedslot = 0
-
+        self.last_schedslot = -1
         self.sch_period = 10
 
         if type == 0:
@@ -14,8 +12,8 @@ class UE:
         else:
             self.sr_period = 100
             self.aloc_rbcnt = 66
-
-        self.scheduling_request(self.sr_period)
+        self.traffic = self.aloc_rbcnt * 100
+        #self.scheduling_request(self.sr_period)
 
     def allocate(self, slot):
         self.sched_cnt += 1
@@ -28,14 +26,17 @@ class UE:
 
     def is_sch_time(self,slot):
         if self.traffic > 0:
-            return (slot - self.last_schedslot) % self.sch_period == 0
+            if self.last_schedslot >= 0:
+                return (slot - self.last_schedslot) % self.sch_period == 0
+            else:
+                return True
         return False
 
     def scheduling_request(self, slot):
         if self.traffic == 0:
             if (slot - self.last_schedslot) % self.sr_period == 0:
                 if self.service_type == 0:
-                    self.traffic = self.aloc_rbcnt * 10
+                    self.traffic = self.aloc_rbcnt * 100
                 else:
-                    self.traffic = self.aloc_rbcnt * 10
+                    self.traffic = self.aloc_rbcnt * 100
 
