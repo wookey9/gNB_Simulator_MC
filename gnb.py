@@ -1,5 +1,6 @@
 from . import cell
 import pandas as pd
+import numpy as np
 import os
 
 class gNodeB:
@@ -7,6 +8,7 @@ class gNodeB:
         self.ue_dist = [32,32,32,32,32,32,32,32]
         self.heavy_dist = [0,0,0,0,0,0,0,0]
         self.maxpdu_list = [2,2,2,2,2,2,2,2]
+        self.heavy_ratio = [0.3,0.3,0.,0.3,0.3,0.8,0.5,0.5]
 
         self.n_cell = N_Cell
         self.cell_list = []
@@ -14,19 +16,14 @@ class gNodeB:
         for cellId in range(N_Cell):
             self.cell_list.append(cell.Cell(cellId, 66))
 
-        self.episode_size = 25
+        self.episode_size = 6
         self.episode_iter = 0
         self.episode_cnt = 0
         self.running_slot = 100
 
-        if os.path.exists('mobilePhoneActivity/input.pkl'):
-            self.mobile_activity = pd.read_pickle('mobilePhoneActivity/input.pkl')
-            max_sum = 0
-            for i, row in self.mobile_activity.iterrows():
-                s = sum(row)
-                if s > max_sum:
-                    max_sum = s
-            self.mobile_activity = (self.mobile_activity * 256 / max_sum).astype(int)
+        if os.path.exists('mobilePhoneActivity/input_7267.pkl'):
+            self.mobile_activity = pd.read_pickle('mobilePhoneActivity/input_7267.pkl')
+
         else:
             self.mobile_activity = pd.DataFrame({})
 
@@ -67,6 +64,7 @@ class gNodeB:
         return self.gnb_tput / 100, cell_tput, cell_rbutil, cell_schedpdu
 
     def apply_action(self, action):
+        self.update_env(self.episode_iter)
         minus_cell = abs(action[0] - 8) - 1
         plus_cell = abs(action[1] - 8) - 1
 
@@ -85,14 +83,16 @@ class gNodeB:
         done = 0
         if self.episode_iter % self.episode_size == 0:
             done = 1
-            self.update_env()
             self.episode_cnt += 1
-            self.maxpdu_list = [2,2,2,2,2,2,2,2]
+            #self.maxpdu_list = [2,2,2,2,2,2,2,2]
         return state,gnb_tput , done
 
-    def update_env(self):
+    def update_env(self, step):
         if len(self.mobile_activity) > 0:
-            self.ue_dist = self.mobile_activity.iloc[self.episode_cnt % len(self.mobile_activity)].values.tolist()
+            row = self.mobile_activity.iloc[step % len(self.mobile_activity)]
+            row = (row * 256 // row.sum()).astype(int)
+            self.ue_dist = row.values.tolist()
+            self.heavy_dist = list(np.multiply(self.ue_dist,self.heavy_ratio))
         else:
             self.ue_dist = [32,32,32,32,32,32,32,32]
             self.heavy_dist = [0,0,0,0,0,0,0,0]
