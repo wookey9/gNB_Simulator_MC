@@ -36,7 +36,7 @@ class UE:
         if self.traffic == 0:
             if (slot - self.last_schedslot) % self.sr_period == 0:
                 if self.service_type == 0:
-                    self.traffic = self.aloc_rbcnt * 100
+                    self.traffic = self.aloc_rbcnt * 1000
                 else:
-                    self.traffic = self.aloc_rbcnt * 100
+                    self.traffic = self.aloc_rbcnt * 1000
 
