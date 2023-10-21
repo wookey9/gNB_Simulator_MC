@@ -9,7 +9,7 @@ class gNodeB:
         self.heavy_dist = [0,0,0,0,0,0,0,0]
         self.maxpdu_list = [2,2,2,2,2,2,2,2]
         self.heavy_ratio = [0.8,0.8,0.8,0.3,0.3,0.3,0.3,0.3]
-        #self.heavy_ratio = [0,0,0,0,0,0,0,0]
+        #ssself.heavy_ratio = [0,0,0,0,0,0,0,0]
 
         self.n_cell = N_Cell
         self.cell_list = []
