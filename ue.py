@@ -12,7 +12,7 @@ class UE:
         else:
             self.sr_period = 100
             self.aloc_rbcnt = 66
-            self.sch_period = 20
+            self.sch_period = 80
         self.traffic = self.aloc_rbcnt * 100
         #self.scheduling_request(self.sr_period)
 

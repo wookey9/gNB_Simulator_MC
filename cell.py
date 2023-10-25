@@ -10,6 +10,7 @@ class Cell:
         self.sch_cnt = 0
         self.rb_utilized = 0
         self.tput = 0
+        self.sched_slotcnt = 0
 
     def attach_UE(self,serviceType):
         self.ue_list.append(ue.UE(len(self.ue_list),serviceType))
@@ -44,6 +45,8 @@ class Cell:
             ue.scheduling_request(slot)'''
 
         self.sch_cnt += schpducnt
+        if schpducnt > 0:
+            self.sched_slotcnt += 1
 
         self.rb_utilized += cell_sch_rbsize
         self.tput += cell_sch_packetsize
@@ -51,10 +54,11 @@ class Cell:
         return cell_sch_packetsize
 
     def get_stat(self, period):
-        return self.rb_utilized * 100 / (period * self.max_RB), self.tput / 100, self.sch_cnt / 100
+        return self.rb_utilized * 100 / (self.sched_slotcnt * self.max_RB), self.tput / 100, self.sch_cnt / 100
 
     def reset_stat(self):
         self.rb_utilized = 0
         self.tput = 0
         self.sch_cnt = 0
+        self.sched_slotcnt = 0
 

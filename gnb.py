@@ -17,10 +17,10 @@ class gNodeB:
         for cellId in range(N_Cell):
             self.cell_list.append(cell.Cell(cellId, 66))
 
-        self.episode_size = 6
+        self.episode_size = 5
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 100
+        self.running_slot = 500
 
         if os.path.exists('mobilePhoneActivity/input_7267.pkl'):
             self.mobile_activity = pd.read_pickle('mobilePhoneActivity/input_7267.pkl')
@@ -65,14 +65,17 @@ class gNodeB:
         return self.gnb_tput / 100, cell_tput, cell_rbutil, cell_schedpdu
 
     def apply_action(self, action):
-        self.update_env(self.episode_iter)
-        minus_cell = abs(action[0] - 8) - 1
-        plus_cell = abs(action[1] - 8) - 1
+        if len(action) == 2:
+            minus_cell = abs(action[0] - 8) - 1
+            plus_cell = abs(action[1] - 8) - 1
 
-        if minus_cell >= 0:
-            self.maxpdu_list[minus_cell] -= 1
-        if plus_cell >= 0:
-            self.maxpdu_list[plus_cell] += 1
+            if minus_cell >= 0:
+                self.maxpdu_list[minus_cell] -= 1
+            if plus_cell >= 0:
+                self.maxpdu_list[plus_cell] += 1
+        elif len(action) == len(self.maxpdu_list):
+            for i,p in enumerate(action):
+                self.maxpdu_list[i] = p
 
         self.episode_iter += 1
 
@@ -86,6 +89,7 @@ class gNodeB:
             done = 1
             self.episode_cnt += 1
             #self.maxpdu_list = [2,2,2,2,2,2,2,2]
+            self.update_env(self.episode_cnt)
         return state,gnb_tput , done
 
     def update_env(self, step):
