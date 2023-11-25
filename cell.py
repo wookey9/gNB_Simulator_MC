@@ -11,6 +11,7 @@ class Cell:
         self.rb_utilized = 0
         self.tput = 0
         self.sched_slotcnt = 0
+        self.last_sched_ue = 0
 
     def attach_UE(self,serviceType):
         self.ue_list.append(ue.UE(len(self.ue_list),serviceType))
@@ -26,6 +27,7 @@ class Cell:
         cell_sch_rbsize = 0
         schpducnt = 0
         searchcnt = 0
+        uid = 0
 
         if len(self.ue_list) > 0:
             while schpducnt < self.maxPdu and (schpducnt + searchcnt < len(self.ue_list)):
@@ -43,7 +45,7 @@ class Cell:
 
         '''for ue in self.ue_list:
             ue.scheduling_request(slot)'''
-
+        self.last_sched_ue = (self.last_sched_ue + schpducnt + searchcnt) % len(self.ue_list)
         self.sch_cnt += schpducnt
         if schpducnt > 0:
             self.sched_slotcnt += 1
@@ -57,6 +59,7 @@ class Cell:
         return self.rb_utilized * 100 / (self.sched_slotcnt * self.max_RB), self.tput / 100, self.sch_cnt / 100
 
     def reset_stat(self):
+        self.last_sched_ue = 0
         self.rb_utilized = 0
         self.tput = 0
         self.sch_cnt = 0

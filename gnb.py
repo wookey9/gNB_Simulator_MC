@@ -2,14 +2,15 @@ from . import cell
 import pandas as pd
 import numpy as np
 import os
+import threading
+import random
 
 class gNodeB:
     def __init__(self, N_Cell):
         self.ue_dist = [32,32,32,32,32,32,32,32]
         self.heavy_dist = [0,0,0,0,0,0,0,0]
         self.maxpdu_list = [2,2,2,2,2,2,2,2]
-        self.heavy_ratio = [0.8,0.8,0.8,0.3,0.3,0.3,0.3,0.3]
-        #ssself.heavy_ratio = [0,0,0,0,0,0,0,0]
+        self.heavy_uid = []
 
         self.n_cell = N_Cell
         self.cell_list = []
@@ -17,21 +18,19 @@ class gNodeB:
         for cellId in range(N_Cell):
             self.cell_list.append(cell.Cell(cellId, 66))
 
-        self.episode_size = 5
+        self.episode_size = 20
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 500
+        self.running_slot = 160
 
+        self.mobile_activity = pd.DataFrame({})
         if os.path.exists('mobilePhoneActivity/input_7267.pkl'):
             self.mobile_activity = pd.read_pickle('mobilePhoneActivity/input_7267.pkl')
-
-        else:
-            self.mobile_activity = pd.DataFrame({})
 
     def set_epi_size(self,size):
         self.episode_size = size
     def run(self, num_slot):
-        if not(len(self.ue_dist) == len(self.heavy_dist) == len(self.maxpdu_list) == len(self.cell_list)):
+        if not(len(self.ue_dist) == len(self.maxpdu_list) == len(self.cell_list)):
             return -1
 
         for cid, cell in enumerate(self.cell_list):
@@ -82,22 +81,26 @@ class gNodeB:
     def observe_state(self):
         self.run(self.running_slot)
         gnb_tput, cell_tput, cell_rb, cell_sched_pdu = self.get_stat()
-        state = cell_rb + cell_tput + self.maxpdu_list + self.ue_dist + self.heavy_dist
+        state = cell_rb + cell_tput + self.maxpdu_list + self.ue_dist + list(self.heavy_dist) + cell_sched_pdu
 
         done = 0
         if self.episode_iter % self.episode_size == 0:
             done = 1
             self.episode_cnt += 1
-            #self.maxpdu_list = [2,2,2,2,2,2,2,2]
-            self.update_env(self.episode_cnt)
+            self.maxpdu_list = [2,2,2,2,2,2,2,2]
+            #self.update_env(self.episode_cnt)
         return state,gnb_tput , done
 
-    def update_env(self, step):
+    def update_env_ue(self):
         if len(self.mobile_activity) > 0:
-            row = self.mobile_activity.iloc[step % len(self.mobile_activity)]
+            row = self.mobile_activity.iloc[self.episode_cnt % len(self.mobile_activity)]
             row = (row * 256 // row.sum()).astype(int)
             self.ue_dist = row.values.tolist()
-            self.heavy_dist = list(np.multiply(self.ue_dist,self.heavy_ratio))
+            #self.heavy_dist = list(np.multiply(self.ue_dist,self.heavy_ratio))
         else:
             self.ue_dist = [32,32,32,32,32,32,32,32]
-            self.heavy_dist = [0,0,0,0,0,0,0,0]
+            #self.heavy_dist = [0,0,0,0,0,0,0,0]
+        return self.ue_dist
+
+    def update_env_heavy(self, heavy_ratio):
+        self.heavy_dist = np.divide(np.multiply(self.ue_dist, heavy_ratio), 100)
