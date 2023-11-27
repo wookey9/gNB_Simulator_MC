@@ -18,7 +18,7 @@ class gNodeB:
         for cellId in range(N_Cell):
             self.cell_list.append(cell.Cell(cellId, 66))
 
-        self.episode_size = 20
+        self.episode_size = 5
         self.episode_iter = 0
         self.episode_cnt = 0
         self.running_slot = 160
@@ -45,11 +45,25 @@ class gNodeB:
 
         self.gnb_tput = 0
 
+        '''threads = []
+        for cell in self.cell_list:
+            thread = threading.Thread(target=self.run_cell, args=(cell,num_slot,))
+            threads.append(thread)
+            thread.start()
+        for thread in threads:
+            thread.join()
+        for cell in self.cell_list:
+            self.gnb_tput += cell.tput'''
+
         for slot in range(num_slot):
             for cell in self.cell_list:
                 self.gnb_tput += cell.schedule(slot)
 
         return 1
+
+    def run_cell(self, cell, num_slot):
+        for slot in range(num_slot):
+            cell.schedule(slot)
 
     def get_stat(self):
         cell_tput = []

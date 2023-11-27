@@ -56,7 +56,7 @@ class Cell:
         return cell_sch_packetsize
 
     def get_stat(self, period):
-        return self.rb_utilized * 100 / (self.sched_slotcnt * self.max_RB), self.tput / 100, self.sch_cnt / 100
+        return self.rb_utilized * 100 / (self.sched_slotcnt * self.max_RB), self.tput / 100, self.sch_cnt
 
     def reset_stat(self):
         self.last_sched_ue = 0
