@@ -105,12 +105,19 @@ class gNodeB:
             #self.update_env(self.episode_cnt)
         return state,gnb_tput , done
 
-    def update_env_ue(self):
+    def update_env_ue(self, uidlist):
         if len(self.mobile_activity) > 0:
-            row = self.mobile_activity.iloc[self.episode_cnt % len(self.mobile_activity)]
-            row = (row * 256 // row.sum()).astype(int)
-            self.ue_dist = row.values.tolist()
+            #row = self.mobile_activity.iloc[self.episode_cnt % len(self.mobile_activity)]
+            #row = (row * 256 // row.sum()).astype(int)
+            #self.ue_dist = row.values.tolist()
             #self.heavy_dist = list(np.multiply(self.ue_dist,self.heavy_ratio))
+            uidcnt = [0,0,0,0,0,0,0,0]
+            lastUid = 0
+            for i,uid in enumerate(uidlist):
+                uidcnt[i] = uid - lastUid
+            uidcnt[7] = 256 - lastUid
+            self.ue_dist = uidcnt
+
         else:
             self.ue_dist = [32,32,32,32,32,32,32,32]
             #self.heavy_dist = [0,0,0,0,0,0,0,0]
