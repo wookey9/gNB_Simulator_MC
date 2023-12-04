@@ -1,7 +1,11 @@
-from . import cell
+import matplotlib.pyplot as plt
+
+import cell
 import pandas as pd
 import numpy as np
 import os
+from collections import deque
+import tensorflow.compat.v1 as tf
 import threading
 import random
 
@@ -9,23 +13,37 @@ class gNodeB:
     def __init__(self, N_Cell):
         self.ue_dist = [32,32,32,32,32,32,32,32]
         self.heavy_dist = [0,0,0,0,0,0,0,0]
-        self.maxpdu_list = [2,2,2,2,2,2,2,2]
+        self.uplink_uenum = [0,0,0,0,0,0,0,0]
+        self.maxpdu_list = [8,8,8,8,8,8,8,8]
         self.heavy_uid = []
+
+        self.uplink_ratio_maxlen = 48 * 5 + 12 * 8
+        self.uplink_ratio_track = deque(maxlen=self.uplink_ratio_maxlen)
+
+        self.tdd_configuration = [1,1,1,1,1,1,1,1,0,0]
 
         self.n_cell = N_Cell
         self.cell_list = []
-        self.gnb_tput = 0
+        self.gnb_tput = [0,0]
         for cellId in range(N_Cell):
             self.cell_list.append(cell.Cell(cellId, 66))
 
-        self.episode_size = 5
+        self.episode_size = 1
         self.episode_iter = 0
         self.episode_cnt = 0
         self.running_slot = 160
 
-        self.mobile_activity = pd.DataFrame({})
-        if os.path.exists('mobilePhoneActivity/input_7267.pkl'):
-            self.mobile_activity = pd.read_pickle('mobilePhoneActivity/input_7267.pkl')
+        self.mobile_activity_down = pd.DataFrame({})
+        self.mobile_activity_up = pd.DataFrame({})
+        if os.path.exists('down_sms.pkl'):
+            self.mobile_activity_down = pd.read_pickle('down_sms.pkl')
+
+        if os.path.exists('up_sms.pkl'):
+            self.mobile_activity_up = pd.read_pickle('up_sms.pkl')
+
+        if os.path.exists('crnn_model'):
+            self.crnn_model = tf.keras.models.load_model('crnn_model')
+
 
     def set_epi_size(self,size):
         self.episode_size = size
@@ -39,11 +57,17 @@ class gNodeB:
             cell.release_All()
             for u in range(self.ue_dist[cid]):
                 if u < self.heavy_dist[cid]:
-                    cell.attach_UE(1)
+                    direction = 1
+                    if u < self.uplink_uenum[cid]:
+                        direction = 0
+                    cell.attach_UE(1, direction)
                 else:
-                    cell.attach_UE(0)
+                    direction = 1
+                    if u < self.uplink_uenum[cid]:
+                        direction = 0
+                    cell.attach_UE(0,direction)
 
-        self.gnb_tput = 0
+        self.gnb_tput = [0,0]
 
         '''threads = []
         for cell in self.cell_list:
@@ -57,13 +81,10 @@ class gNodeB:
 
         for slot in range(num_slot):
             for cell in self.cell_list:
-                self.gnb_tput += cell.schedule(slot)
+                direction = self.tdd_configuration[slot % len(self.tdd_configuration)]
+                self.gnb_tput[direction] += cell.schedule(slot, direction)
 
         return 1
-
-    def run_cell(self, cell, num_slot):
-        for slot in range(num_slot):
-            cell.schedule(slot)
 
     def get_stat(self):
         cell_tput = []
@@ -75,7 +96,7 @@ class gNodeB:
             cell_rbutil.append(rbutil)
             cell_schedpdu.append(schedpdu)
 
-        return self.gnb_tput / 100, cell_tput, cell_rbutil, cell_schedpdu
+        return self.gnb_tput, cell_tput, cell_rbutil, cell_schedpdu
 
     def apply_action(self, action):
         if len(action) == 2:
@@ -101,16 +122,28 @@ class gNodeB:
         if self.episode_iter % self.episode_size == 0:
             done = 1
             self.episode_cnt += 1
-            self.maxpdu_list = [2,2,2,2,2,2,2,2]
-            #self.update_env(self.episode_cnt)
+            #self.maxpdu_list = [2,2,2,2,2,2,2,2]
+            self.update_env(self.episode_cnt)
         return state,gnb_tput , done
+
+    def update_env(self, slot):
+        if len(self.mobile_activity_down) > 0 and len(self.mobile_activity_up) > 0:
+            down_row = self.mobile_activity_down.iloc[slot % len(self.mobile_activity_down)]
+            up_row = self.mobile_activity_up.iloc[slot % len(self.mobile_activity_up)]
+            row = down_row + up_row
+            #up_row = (up_row * 256 // row.sum()).astype(int)
+            #row = (row * 256 // row.sum()).astype(int)
+            self.ue_dist = row.astype(int).values.tolist()
+            self.uplink_uenum = up_row.astype(int).values.tolist()
+
+
+            self.uplink_ratio_track.append(sum(self.uplink_uenum) / sum(self.ue_dist))
+
+        else:
+            self.ue_dist = [32,32,32,32,32,32,32,32]
 
     def update_env_ue(self, uidlist):
         if len(self.mobile_activity) > 0:
-            #row = self.mobile_activity.iloc[self.episode_cnt % len(self.mobile_activity)]
-            #row = (row * 256 // row.sum()).astype(int)
-            #self.ue_dist = row.values.tolist()
-            #self.heavy_dist = list(np.multiply(self.ue_dist,self.heavy_ratio))
             uidcnt = [0,0,0,0,0,0,0,0]
             lastUid = 0
             for i,uid in enumerate(uidlist):
@@ -125,3 +158,71 @@ class gNodeB:
 
     def update_env_heavy(self, heavy_ratio):
         self.heavy_dist = np.divide(np.multiply(self.ue_dist, heavy_ratio), 100)
+
+    def update_env_uplink_ue(self, uplink_ratio):
+        self.uplink_uenum = np.divide(np.multiply(self.ue_dist, uplink_ratio), 100)
+
+    def update_tdd_configuration(self):
+        if os.path.exists('crnn_model'):
+            data = self.convert_ulratio_to_2d()
+            predicted_ulratio = self.crnn_model.predict(data)
+            listed_ulratio = []
+            for i in range(0, 12):
+                for j in range(0, 12):
+                    ratio = predicted_ulratio[0,j,i,0]
+                    listed_ulratio.append(ratio)
+
+            for i, tdd in enumerate(self.tdd_configuration):
+                if i < (10 - max(10 * predicted_ulratio[:,8:,::,0].mean(), 1)):
+                    self.tdd_configuration[i] = 1  # downlink
+                else:
+                    self.tdd_configuration[i] = 0  # uplink
+            return predicted_ulratio[:,8:,::,0].mean()
+        return 0
+
+
+
+    def convert_ulratio_to_2d(self):
+        row = 12
+        column = 12
+        data = np.zeros((1,5,12,12,1))
+        for a in range(5):
+            width = 12
+            height = 12
+            for i in range(0, height):
+                for j in range(0, width):
+                    data[0,a,j, i,0] = self.uplink_ratio_track[(a * row * 4) + i * row + j]
+        return data
+
+if __name__ == '__main__':
+    gnb = gNodeB(8)
+
+    tput_history_dl  = []
+    tput_history_ul  = []
+    tput_history_ulratio = []
+    tput_history_ulratio_pre = []
+
+    for i in range(len(gnb.mobile_activity_down)):
+        state,tput,_ = gnb.observe_state()
+        print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
+        tput_history_dl.append(tput[1])
+        tput_history_ul.append(tput[0])
+        tput_history_ulratio.append(gnb.uplink_ratio_track[-1])
+
+        if i % 48 == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+            ulratio_pre = gnb.update_tdd_configuration()
+            tput_history_ulratio_pre.append(ulratio_pre)
+            print(f'  predicted ul ratio : {ulratio_pre}/{gnb.uplink_ratio_track[-1]}')
+
+
+    plt.plot(tput_history_dl)
+    plt.plot(tput_history_ul)
+    plt.plot([x + y for x,y in zip(tput_history_dl,tput_history_ul)])
+
+    f = plt.figure()
+    plt.plot(tput_history_ulratio)
+
+    f = plt.figure()
+    plt.plot(tput_history_ulratio_pre)
+
+    plt.show()

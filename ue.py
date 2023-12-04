@@ -1,7 +1,8 @@
 class UE:
-    def __init__(self,uid, type):
+    def __init__(self,uid, type, direction):
         self.uid = uid
         self.service_type = type
+        self.direction = direction  #0:Uplink, 1:Downlink
         self.sched_cnt = 0
         self.last_schedslot = -1
         self.throughput = 0
