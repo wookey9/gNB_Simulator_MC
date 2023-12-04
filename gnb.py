@@ -6,6 +6,7 @@ import numpy as np
 import os
 from collections import deque
 import tensorflow.compat.v1 as tf
+from PIL import Image
 import threading
 import random
 
@@ -14,7 +15,7 @@ class gNodeB:
         self.ue_dist = [32,32,32,32,32,32,32,32]
         self.heavy_dist = [0,0,0,0,0,0,0,0]
         self.uplink_uenum = [0,0,0,0,0,0,0,0]
-        self.maxpdu_list = [8,8,8,8,8,8,8,8]
+        self.maxpdu_list = [2,2,2,2,2,2,2,2]
         self.heavy_uid = []
 
         self.uplink_ratio_maxlen = 48 * 5 + 12 * 8
@@ -31,7 +32,7 @@ class gNodeB:
         self.episode_size = 1
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 160
+        self.running_slot = 10
 
         self.mobile_activity_down = pd.DataFrame({})
         self.mobile_activity_up = pd.DataFrame({})
@@ -82,7 +83,7 @@ class gNodeB:
         for slot in range(num_slot):
             for cell in self.cell_list:
                 direction = self.tdd_configuration[slot % len(self.tdd_configuration)]
-                self.gnb_tput[direction] += cell.schedule(slot, direction) / 1000
+                self.gnb_tput[direction] += cell.schedule(slot, direction) / 10
 
         return 1
 
@@ -165,20 +166,23 @@ class gNodeB:
     def update_tdd_configuration(self):
         if os.path.exists('crnn_model'):
             data = self.convert_ulratio_to_2d()
+
             predicted_ulratio = self.crnn_model.predict(data)
+
             listed_ulratio = []
+
             for i in range(0, 12):
                 for j in range(0, 12):
                     ratio = predicted_ulratio[0,j,i,0]
-                    listed_ulratio.append(ratio)
+                    listed_ulratio.append(1 - ratio)
 
             for i, tdd in enumerate(self.tdd_configuration):
-                if i < (10 - max(10 * predicted_ulratio[:,8:,::,0].mean(), 1)):
+                if i < (10 - max(10 * np.mean(listed_ulratio[-48:-42]), 1)):
                     self.tdd_configuration[i] = 1  # downlink
                 else:
                     self.tdd_configuration[i] = 0  # uplink
-            return predicted_ulratio[:,8:,::,0].mean()
-        return 0
+            return listed_ulratio
+        return []
 
 
 
@@ -191,7 +195,8 @@ class gNodeB:
             height = 12
             for i in range(0, height):
                 for j in range(0, width):
-                    data[0,a,j, i,0] = self.uplink_ratio_track[(a * row * 4) + i * row + j]
+                    data[0,a,j,i,0] = (1 - self.uplink_ratio_track[(a * row * 4) + i * row + j])
+
         return data
 
 def avg_data(data, alpha):
@@ -205,12 +210,48 @@ def avg_data(data, alpha):
 if __name__ == '__main__':
     gnb = gNodeB(8)
 
+    traffic_total = []
+    traffic_ul = []
+
+    tput_history_dl = []
+    tput_history_ul = []
+    tput_history_ulratio = []
+    tput_history_ulratio_pre = []
+
+    minutes = []
+    tdd_minutes = []
+    for i in range(len(gnb.mobile_activity_down)):
+        minutes.append(i * 10)
+        state, tput, _ = gnb.observe_state()
+        traffic_total.append(sum(gnb.ue_dist))
+        traffic_ul.append(sum(gnb.uplink_uenum))
+        print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
+        tput_history_dl.append(tput[1])
+        tput_history_ul.append(tput[0])
+        tput_history_ulratio.append(gnb.uplink_ratio_track[-1])
+
+        '''if i % 48 == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+            ulratio_pre = gnb.update_tdd_configuration()
+            for j, ur in enumerate(ulratio_pre[-48:]):
+                tdd_minutes.append((i - 48 + j) * 10)
+                tput_history_ulratio_pre.append(ur)
+            print(f'  predicted ul ratio : {np.mean(ulratio_pre)}/{gnb.uplink_ratio_track[-1]}')'''
+
+    plt.plot(minutes[300:], avg_data(tput_history_dl[300:], 0.9), label='downlink')
+    plt.plot(minutes[300:], avg_data(tput_history_ul[300:], 0.9), label='uplink')
+    plt.plot(minutes[300:], avg_data([x + y for x, y in zip(tput_history_dl, tput_history_ul)][300:], 0.9), label='total')
+    plt.ylabel('Throughput(Mbps)')
+    plt.xlabel('Minutes')
+    plt.legend(loc='upper right')
+
+    gnb = gNodeB(8)
     tput_history_dl  = []
     tput_history_ul  = []
     tput_history_ulratio = []
     tput_history_ulratio_pre = []
 
     minutes = []
+    tdd_minutes = []
     for i in range(len(gnb.mobile_activity_down)):
         minutes.append(i*10)
         state,tput,_ = gnb.observe_state()
@@ -219,23 +260,32 @@ if __name__ == '__main__':
         tput_history_ul.append(tput[0])
         tput_history_ulratio.append(gnb.uplink_ratio_track[-1])
 
-        '''if i % 48 == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+        if i % 6 == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+
             ulratio_pre = gnb.update_tdd_configuration()
-            tput_history_ulratio_pre.append(ulratio_pre)
-            print(f'  predicted ul ratio : {ulratio_pre}/{gnb.uplink_ratio_track[-1]}')'''
+            for j, ur in enumerate(ulratio_pre[-48:-42]):
+                tdd_minutes.append((i + j - 48) * 10)
+                tput_history_ulratio_pre.append(ur)
+            print(f'  predicted ul ratio : {np.mean(ulratio_pre)}/{gnb.uplink_ratio_track[-1]}')
 
-
-    plt.plot(minutes, avg_data(tput_history_dl,0.9), label='downlink')
-    plt.plot(minutes, avg_data(tput_history_ul,0.9), label='uplink')
-    plt.plot(minutes, avg_data([x + y for x,y in zip(tput_history_dl,tput_history_ul)], 0.9), label='total')
+    f = plt.figure()
+    plt.plot(minutes[300:], avg_data(tput_history_dl[300:],0.9), label='downlink')
+    plt.plot(minutes[300:], avg_data(tput_history_ul[300:],0.9), label='uplink')
+    plt.plot(minutes[300:], avg_data([x + y for x,y in zip(tput_history_dl,tput_history_ul)][300:], 0.9), label='total')
     plt.ylabel('Throughput(Mbps)')
     plt.xlabel('Minutes')
+    plt.legend(loc='upper right')
+
+    f = plt.figure()
+    plt.plot(minutes, avg_data(tput_history_ulratio,0.9))
+    plt.plot(tdd_minutes, avg_data(tput_history_ulratio_pre, 0.9))
+    plt.ylabel('Uplink traffic ratio (%)')
+    plt.xlabel('Minutes')
+
+    f = plt.figure()
+    plt.plot(minutes[300:],avg_data(traffic_total[300:],0.9),label='total')
+    plt.plot(minutes[300:],avg_data(traffic_ul[300:],0.9),label='uplink')
+    plt.ylabel('# of active users')
+    plt.xlabel('Minutes')
     plt.legend()
-
-    f = plt.figure()
-    plt.plot(avg_data(tput_history_ulratio,0.9))
-
-    f = plt.figure()
-    plt.plot(tput_history_ulratio_pre)
-
     plt.show()

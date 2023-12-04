@@ -37,8 +37,6 @@ if not os.path.exists("up_ratio.csv"):
         else:
             df_in_all = pd.merge(df_in_all, df, left_index=True,
                                  right_index=True, suffixes=("", str(cell)))
-
-
         if len(df_in) == 0:
             df_in = df
         else:
