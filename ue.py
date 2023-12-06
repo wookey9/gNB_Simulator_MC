@@ -15,7 +15,7 @@ class UE:
             self.sr_period = 100
             self.aloc_rbcnt = 66
             self.sch_period = 10
-        self.traffic = self.aloc_rbcnt * 10
+        self.traffic = self.aloc_rbcnt
         #self.scheduling_request(self.sr_period)
 
     def allocate(self, slot):

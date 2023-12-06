@@ -32,7 +32,7 @@ class gNodeB:
         self.episode_size = 1
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 10
+        self.running_slot = 30
 
         self.mobile_activity_down = pd.DataFrame({})
         self.mobile_activity_up = pd.DataFrame({})
@@ -132,8 +132,8 @@ class gNodeB:
             down_row = self.mobile_activity_down.iloc[slot % len(self.mobile_activity_down)]
             up_row = self.mobile_activity_up.iloc[slot % len(self.mobile_activity_up)]
             row = down_row + up_row
-            #up_row = (up_row * 256 // row.sum()).astype(int)
-            #row = (row * 256 // row.sum()).astype(int)
+            row = (row * 256 // row.sum()).astype(int)
+            up_row = (up_row * 256 // (down_row + up_row).sum()).astype(int)
             self.ue_dist = row.astype(int).values.tolist()
             self.uplink_uenum = up_row.astype(int).values.tolist()
 
@@ -277,8 +277,8 @@ if __name__ == '__main__':
     plt.legend(loc='upper right')
 
     f = plt.figure()
-    plt.plot(minutes, avg_data(tput_history_ulratio,0.9))
-    plt.plot(tdd_minutes, avg_data(tput_history_ulratio_pre, 0.9))
+    plt.plot(minutes[300:], avg_data(tput_history_ulratio[300:],0.9))
+    plt.plot(tdd_minutes[300:], avg_data(tput_history_ulratio_pre[300:], 0.9))
     plt.ylabel('Uplink traffic ratio (%)')
     plt.xlabel('Minutes')
 
