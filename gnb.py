@@ -163,21 +163,23 @@ class gNodeB:
     def update_env_uplink_ue(self, uplink_ratio):
         self.uplink_uenum = np.divide(np.multiply(self.ue_dist, uplink_ratio), 100)
 
-    def update_tdd_configuration(self):
+    def update_tdd_configuration(self, interval):
         if os.path.exists('crnn_model'):
             data = self.convert_ulratio_to_2d()
 
             predicted_ulratio = self.crnn_model.predict(data)
 
+            #np.savetxt('predicted_image.txt', predicted_ulratio[0,:,:,0], fmt='%f')
+
             listed_ulratio = []
 
             for i in range(0, 12):
                 for j in range(0, 12):
-                    ratio = predicted_ulratio[0,j,i,0]
+                    ratio = predicted_ulratio[0,i,j,0]
                     listed_ulratio.append(1 - ratio)
 
             for i, tdd in enumerate(self.tdd_configuration):
-                if i < (10 - max(10 * np.mean(listed_ulratio[-48:-42]), 1)):
+                if i < (10 - max(10 * np.mean(listed_ulratio[-48:]), 1)):
                     self.tdd_configuration[i] = 1  # downlink
                 else:
                     self.tdd_configuration[i] = 0  # uplink
@@ -195,7 +197,8 @@ class gNodeB:
             height = 12
             for i in range(0, height):
                 for j in range(0, width):
-                    data[0,a,j,i,0] = (1 - self.uplink_ratio_track[(a * row * 4) + i * row + j])
+                    data[0,a,i,j,0] = (1 - self.uplink_ratio_track[(a * row * 4) + i * row + j])
+            #np.savetxt('input_image_{}.txt'.format([a]), data[0,a,:,:,0], fmt='%f')
 
         return data
 
@@ -230,13 +233,6 @@ if __name__ == '__main__':
         tput_history_ul.append(tput[0])
         tput_history_ulratio.append(gnb.uplink_ratio_track[-1])
 
-        '''if i % 48 == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
-            ulratio_pre = gnb.update_tdd_configuration()
-            for j, ur in enumerate(ulratio_pre[-48:]):
-                tdd_minutes.append((i - 48 + j) * 10)
-                tput_history_ulratio_pre.append(ur)
-            print(f'  predicted ul ratio : {np.mean(ulratio_pre)}/{gnb.uplink_ratio_track[-1]}')'''
-
     plt.plot(minutes[300:], avg_data(tput_history_dl[300:], 0.9), label='downlink')
     plt.plot(minutes[300:], avg_data(tput_history_ul[300:], 0.9), label='uplink')
     plt.plot(minutes[300:], avg_data([x + y for x, y in zip(tput_history_dl, tput_history_ul)][300:], 0.9), label='total')
@@ -252,6 +248,7 @@ if __name__ == '__main__':
 
     minutes = []
     tdd_minutes = []
+    tdd_interval = 48
     for i in range(len(gnb.mobile_activity_down)):
         minutes.append(i*10)
         state,tput,_ = gnb.observe_state()
@@ -260,11 +257,11 @@ if __name__ == '__main__':
         tput_history_ul.append(tput[0])
         tput_history_ulratio.append(gnb.uplink_ratio_track[-1])
 
-        if i % 6 == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+        if i % tdd_interval == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
 
-            ulratio_pre = gnb.update_tdd_configuration()
-            for j, ur in enumerate(ulratio_pre[-48:-42]):
-                tdd_minutes.append((i + j - 48) * 10)
+            ulratio_pre = gnb.update_tdd_configuration(tdd_interval)
+            for j, ur in enumerate(ulratio_pre[-48:]):
+                tdd_minutes.append((i + j) * 10)
                 tput_history_ulratio_pre.append(ur)
             print(f'  predicted ul ratio : {np.mean(ulratio_pre)}/{gnb.uplink_ratio_track[-1]}')
 
