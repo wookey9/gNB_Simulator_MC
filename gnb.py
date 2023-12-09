@@ -274,8 +274,8 @@ if __name__ == '__main__':
     plt.legend(loc='upper right')
 
     f = plt.figure()
-    plt.plot(minutes[300:], avg_data(tput_history_ulratio[300:],0.9))
-    plt.plot(tdd_minutes[300:], avg_data(tput_history_ulratio_pre[300:], 0.9))
+    plt.plot(minutes, avg_data(tput_history_ulratio,0.9))
+    plt.plot(tdd_minutes, avg_data(tput_history_ulratio_pre, 0.9))
     plt.ylabel('Uplink traffic ratio (%)')
     plt.xlabel('Minutes')
 
