@@ -21,7 +21,7 @@ class gNodeB:
         self.uplink_ratio_maxlen = 48 * 5 + 12 * 8
         self.uplink_ratio_track = deque(maxlen=self.uplink_ratio_maxlen)
 
-        self.tdd_configuration = [1,1,1,1,1,1,1,1,0,0]
+        self.tdd_configuration = [1,1,1,1,1,1,0,0,0,0]
 
         self.n_cell = N_Cell
         self.cell_list = []
@@ -32,7 +32,7 @@ class gNodeB:
         self.episode_size = 1
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 30
+        self.running_slot = 100
 
         self.mobile_activity_down = pd.DataFrame({})
         self.mobile_activity_up = pd.DataFrame({})
@@ -44,6 +44,9 @@ class gNodeB:
 
         if os.path.exists('crnn_model'):
             self.crnn_model = tf.keras.models.load_model('crnn_model')
+
+        if os.path.exists('lstm_model'):
+            self.lstm_model = tf.keras.models.load_model('lstm_model')
 
 
     def set_epi_size(self,size):
@@ -163,7 +166,7 @@ class gNodeB:
     def update_env_uplink_ue(self, uplink_ratio):
         self.uplink_uenum = np.divide(np.multiply(self.ue_dist, uplink_ratio), 100)
 
-    def update_tdd_configuration(self, interval):
+    def predict_ulratio(self):
         if os.path.exists('crnn_model'):
             data = self.convert_ulratio_to_2d()
 
@@ -178,13 +181,24 @@ class gNodeB:
                     ratio = predicted_ulratio[0,i,j,0]
                     listed_ulratio.append(1 - ratio)
 
-            for i, tdd in enumerate(self.tdd_configuration):
-                if i < (10 - max(10 * np.mean(listed_ulratio[-48:]), 1)):
-                    self.tdd_configuration[i] = 1  # downlink
-                else:
-                    self.tdd_configuration[i] = 0  # uplink
-            return listed_ulratio
+            return listed_ulratio[-48:]
         return []
+
+    def predict_ulratio_lstm(self):
+        if os.path.exists('lstm_model'):
+            data = self.uplink_ratio_track
+
+            return self.lstm_model.predict(np.array(data).reshape(1,336,1)).reshape(48)
+        return []
+
+    def update_tdd_configuration(self, ulratio):
+        for i, tdd in enumerate(self.tdd_configuration):
+            if i <= np.round(10 - max(10 * ulratio, 1)) - 1:
+                self.tdd_configuration[i] = 1  # downlink
+            else:
+                self.tdd_configuration[i] = 0  # uplink
+
+        return self.tdd_configuration
 
 
 
@@ -218,11 +232,16 @@ if __name__ == '__main__':
 
     tput_history_dl = []
     tput_history_ul = []
-    tput_history_ulratio = []
-    tput_history_ulratio_pre = []
+    ulratio_history = []
+    pre_ulratio_history = []
+    pre_ulratio_history_lstm = []
 
     minutes = []
-    tdd_minutes = []
+    pre_minutes = []
+
+    mean_performance = []
+    mean_performance2 = []
+
     for i in range(len(gnb.mobile_activity_down)):
         minutes.append(i * 10)
         state, tput, _ = gnb.observe_state()
@@ -231,58 +250,129 @@ if __name__ == '__main__':
         print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
         tput_history_dl.append(tput[1])
         tput_history_ul.append(tput[0])
-        tput_history_ulratio.append(gnb.uplink_ratio_track[-1])
+        ulratio_history.append(gnb.uplink_ratio_track[-1])
 
     plt.plot(minutes[300:], avg_data(tput_history_dl[300:], 0.9), label='downlink')
     plt.plot(minutes[300:], avg_data(tput_history_ul[300:], 0.9), label='uplink')
-    plt.plot(minutes[300:], avg_data([x + y for x, y in zip(tput_history_dl, tput_history_ul)][300:], 0.9), label='total')
+    total_tput = [x + y for x, y in zip(tput_history_dl, tput_history_ul)]
+    plt.plot(minutes[300:], avg_data(total_tput[300:], 0.9), label='total')
     plt.ylabel('Throughput(Mbps)')
     plt.xlabel('Minutes')
     plt.legend(loc='upper right')
 
-    gnb = gNodeB(8)
-    tput_history_dl  = []
-    tput_history_ul  = []
-    tput_history_ulratio = []
-    tput_history_ulratio_pre = []
+    #mean_performance.append(np.mean(total_tput[300:]))
 
-    minutes = []
-    tdd_minutes = []
-    tdd_interval = 48
-    for i in range(len(gnb.mobile_activity_down)):
-        minutes.append(i*10)
-        state,tput,_ = gnb.observe_state()
-        print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
-        tput_history_dl.append(tput[1])
-        tput_history_ul.append(tput[0])
-        tput_history_ulratio.append(gnb.uplink_ratio_track[-1])
+    tdd_interval_list = [1,2,4,8,16,24,48]
+    predict_interval = 48
+    for tdd_interval in tdd_interval_list:
 
-        if i % tdd_interval == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+        gnb = gNodeB(8)
+        tput_history_dl = []
+        tput_history_ul = []
+        ulratio_history = []
+        pre_ulratio_history = []
+        pre_ulratio_queue = deque(maxlen=48)
 
-            ulratio_pre = gnb.update_tdd_configuration(tdd_interval)
-            for j, ur in enumerate(ulratio_pre[-48:]):
-                tdd_minutes.append((i + j) * 10)
-                tput_history_ulratio_pre.append(ur)
-            print(f'  predicted ul ratio : {np.mean(ulratio_pre)}/{gnb.uplink_ratio_track[-1]}')
+        minutes = []
+        pre_minutes = []
+
+        for i in range(len(gnb.mobile_activity_down)):
+            minutes.append(i*10)
+
+            if i % predict_interval == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+                ulratio_pre = gnb.predict_ulratio()
+                for j, ur in enumerate(ulratio_pre):
+                    pre_minutes.append((i + j) * 10)
+                    pre_ulratio_history.append(ur)
+                    pre_ulratio_queue.append(ur)
+
+                print(f'  predicted ul ratio : {np.mean(ulratio_pre)}/{gnb.uplink_ratio_track[-1]}')
+
+            if i % tdd_interval == 0 and len(pre_ulratio_queue) >= tdd_interval:
+                ulratio_tdd = []
+                for d in range(tdd_interval):
+                    ulratio_tdd.append(pre_ulratio_queue.popleft())
+
+                gnb.update_tdd_configuration(np.mean(ulratio_tdd))
+                print(f'    tdd changed : {gnb.tdd_configuration} / {np.mean(ulratio_tdd)}')
+
+            state,tput,_ = gnb.observe_state()
+            print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
+            tput_history_dl.append(tput[1])
+            tput_history_ul.append(tput[0])
+            ulratio_history.append(gnb.uplink_ratio_track[-1])
+
+        total_tput = [x + y for x, y in zip(tput_history_dl, tput_history_ul)]
+        f = plt.figure()
+        plt.plot(minutes[300:], avg_data(tput_history_dl[300:],0.9), label='downlink')
+        plt.plot(minutes[300:], avg_data(tput_history_ul[300:],0.9), label='uplink')
+        plt.plot(minutes[300:], avg_data(total_tput[300:], 0.9), label='total')
+        plt.ylabel('Throughput(Mbps)')
+        plt.xlabel('Minutes')
+        plt.legend(loc='upper right')
+
+        mean_performance.append(np.mean(total_tput[300:]))
+
+    tdd_interval_list = [1, 2, 4, 8, 16, 24, 48]
+    predict_interval = 48
+    for tdd_interval in tdd_interval_list:
+
+        gnb = gNodeB(8)
+        tput_history_dl = []
+        tput_history_ul = []
+        ulratio_history = []
+        pre_ulratio_history_lstm = []
+        pre_ulratio_queue = deque(maxlen=48)
+
+        minutes = []
+        pre_minutes = []
+
+        for i in range(len(gnb.mobile_activity_down)):
+            minutes.append(i * 10)
+
+            if i % predict_interval == 0 and len(gnb.uplink_ratio_track) == gnb.uplink_ratio_maxlen:
+                ulratio_pre = gnb.predict_ulratio_lstm()
+                for j, ur in enumerate(ulratio_pre):
+                    pre_minutes.append((i + j) * 10)
+                    pre_ulratio_history_lstm.append(ur)
+                    pre_ulratio_queue.append(ur)
+
+                print(f'  predicted ul ratio : {np.mean(ulratio_pre)}/{gnb.uplink_ratio_track[-1]}')
+
+            if i % tdd_interval == 0 and len(pre_ulratio_queue) >= tdd_interval:
+                ulratio_tdd = []
+                for d in range(tdd_interval):
+                    ulratio_tdd.append(pre_ulratio_queue.popleft())
+
+                gnb.update_tdd_configuration(np.mean(ulratio_tdd))
+                print(f'    tdd changed : {gnb.tdd_configuration} / {np.mean(ulratio_tdd)}')
+
+            state, tput, _ = gnb.observe_state()
+            print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
+            tput_history_dl.append(tput[1])
+            tput_history_ul.append(tput[0])
+            ulratio_history.append(gnb.uplink_ratio_track[-1])
+
+        total_tput = [x + y for x, y in zip(tput_history_dl, tput_history_ul)]
+        f = plt.figure()
+        plt.plot(minutes[300:], avg_data(tput_history_dl[300:], 0.9), label='downlink')
+        plt.plot(minutes[300:], avg_data(tput_history_ul[300:], 0.9), label='uplink')
+        plt.plot(minutes[300:], avg_data(total_tput[300:], 0.9), label='total')
+        plt.ylabel('Throughput(Mbps)')
+        plt.xlabel('Minutes')
+        plt.legend(loc='upper right')
+
+        mean_performance2.append(np.mean(total_tput[300:]))
 
     f = plt.figure()
-    plt.plot(minutes[300:], avg_data(tput_history_dl[300:],0.9), label='downlink')
-    plt.plot(minutes[300:], avg_data(tput_history_ul[300:],0.9), label='uplink')
-    plt.plot(minutes[300:], avg_data([x + y for x,y in zip(tput_history_dl,tput_history_ul)][300:], 0.9), label='total')
-    plt.ylabel('Throughput(Mbps)')
-    plt.xlabel('Minutes')
-    plt.legend(loc='upper right')
-
-    f = plt.figure()
-    plt.plot(minutes, avg_data(tput_history_ulratio,0.9))
-    plt.plot(tdd_minutes, avg_data(tput_history_ulratio_pre, 0.9))
+    plt.plot(minutes, avg_data(ulratio_history, 0.9))
+    plt.plot(pre_minutes, avg_data(pre_ulratio_history, 0.9))
+    plt.plot(pre_minutes, avg_data(pre_ulratio_history_lstm, 0.9))
     plt.ylabel('Uplink traffic ratio (%)')
     plt.xlabel('Minutes')
 
     f = plt.figure()
-    plt.plot(minutes[300:],avg_data(traffic_total[300:],0.9),label='total')
-    plt.plot(minutes[300:],avg_data(traffic_ul[300:],0.9),label='uplink')
-    plt.ylabel('# of active users')
-    plt.xlabel('Minutes')
-    plt.legend()
+    plt.plot(mean_performance, marker='o')
+    plt.plot(mean_performance2, marker='^')
+
     plt.show()

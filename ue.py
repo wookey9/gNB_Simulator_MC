@@ -9,13 +9,13 @@ class UE:
 
         if type == 0:
             self.sr_period = 100
-            self.aloc_rbcnt = 8
+            self.aloc_rbcnt = 4
             self.sch_period = 10
         else:
             self.sr_period = 100
             self.aloc_rbcnt = 66
             self.sch_period = 10
-        self.traffic = self.aloc_rbcnt
+        self.traffic = self.aloc_rbcnt * 10
         #self.scheduling_request(self.sr_period)
 
     def allocate(self, slot):
