@@ -32,7 +32,7 @@ class gNodeB:
         self.episode_size = 1
         self.episode_iter = 0
         self.episode_cnt = 0
-        self.running_slot = 100
+        self.running_slot = 30
 
         self.mobile_activity_down = pd.DataFrame({})
         self.mobile_activity_up = pd.DataFrame({})
@@ -192,13 +192,14 @@ class gNodeB:
         return []
 
     def update_tdd_configuration(self, ulratio):
+        prev_tdd = self.tdd_configuration.copy()
         for i, tdd in enumerate(self.tdd_configuration):
             if i <= np.round(10 - max(10 * ulratio, 1)) - 1:
                 self.tdd_configuration[i] = 1  # downlink
             else:
                 self.tdd_configuration[i] = 0  # uplink
 
-        return self.tdd_configuration
+        return prev_tdd == self.tdd_configuration
 
 
 
@@ -240,7 +241,12 @@ if __name__ == '__main__':
     pre_minutes = []
 
     mean_performance = []
+    reconf_cost = []
     mean_performance2 = []
+    reconf_cost2 = []
+
+    reconf_resp_delay = 100
+    reconf_cnt = 0
 
     for i in range(len(gnb.mobile_activity_down)):
         minutes.append(i * 10)
@@ -265,14 +271,15 @@ if __name__ == '__main__':
     tdd_interval_list = [1,2,4,8,16,24,48]
     predict_interval = 48
     for tdd_interval in tdd_interval_list:
-
-        gnb = gNodeB(8)
+        gnb.episode_cnt = 0
+        gnb.uplink_ratio_track.clear()
+        gnb.tdd_configuration = [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]
         tput_history_dl = []
         tput_history_ul = []
         ulratio_history = []
         pre_ulratio_history = []
-        pre_ulratio_queue = deque(maxlen=48)
-
+        pre_ulratio_queue = deque(maxlen=predict_interval)
+        reconf_cnt = 0
         minutes = []
         pre_minutes = []
 
@@ -293,7 +300,9 @@ if __name__ == '__main__':
                 for d in range(tdd_interval):
                     ulratio_tdd.append(pre_ulratio_queue.popleft())
 
-                gnb.update_tdd_configuration(np.mean(ulratio_tdd))
+                if gnb.update_tdd_configuration(np.mean(ulratio_tdd)):
+                    reconf_cnt += 1
+
                 print(f'    tdd changed : {gnb.tdd_configuration} / {np.mean(ulratio_tdd)}')
 
             state,tput,_ = gnb.observe_state()
@@ -312,18 +321,19 @@ if __name__ == '__main__':
         plt.legend(loc='upper right')
 
         mean_performance.append(np.mean(total_tput[300:]))
+        reconf_cost.append(reconf_cnt * reconf_resp_delay)
 
-    tdd_interval_list = [1, 2, 4, 8, 16, 24, 48]
-    predict_interval = 48
     for tdd_interval in tdd_interval_list:
 
-        gnb = gNodeB(8)
+        gnb.episode_cnt = 0
+        gnb.uplink_ratio_track.clear()
+        gnb.tdd_configuration = [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]
         tput_history_dl = []
         tput_history_ul = []
         ulratio_history = []
         pre_ulratio_history_lstm = []
-        pre_ulratio_queue = deque(maxlen=48)
-
+        pre_ulratio_queue = deque(maxlen=predict_interval)
+        reconf_cnt = 0
         minutes = []
         pre_minutes = []
 
@@ -344,11 +354,12 @@ if __name__ == '__main__':
                 for d in range(tdd_interval):
                     ulratio_tdd.append(pre_ulratio_queue.popleft())
 
-                gnb.update_tdd_configuration(np.mean(ulratio_tdd))
+                if gnb.update_tdd_configuration(np.mean(ulratio_tdd)):
+                    reconf_cnt += 1
                 print(f'    tdd changed : {gnb.tdd_configuration} / {np.mean(ulratio_tdd)}')
 
             state, tput, _ = gnb.observe_state()
-            print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
+            #print(f'iter : {i}, tput : {tput[1]}/{tput[0]}')
             tput_history_dl.append(tput[1])
             tput_history_ul.append(tput[0])
             ulratio_history.append(gnb.uplink_ratio_track[-1])
@@ -363,16 +374,26 @@ if __name__ == '__main__':
         plt.legend(loc='upper right')
 
         mean_performance2.append(np.mean(total_tput[300:]))
+        reconf_cost2.append(reconf_cnt * reconf_resp_delay)
 
     f = plt.figure()
-    plt.plot(minutes, avg_data(ulratio_history, 0.9))
-    plt.plot(pre_minutes, avg_data(pre_ulratio_history, 0.9))
-    plt.plot(pre_minutes, avg_data(pre_ulratio_history_lstm, 0.9))
+    plt.plot(minutes, avg_data(ulratio_history, 0.9), label='Actual')
+    plt.plot(pre_minutes, avg_data(pre_ulratio_history, 0.9), linestyle='--', color='r', label='Predicted(ConvLSTM)')
+    plt.plot(pre_minutes, avg_data(pre_ulratio_history_lstm, 0.9),linestyle='-.', alpha=0.8, label='Predicted(LSTM)')
     plt.ylabel('Uplink traffic ratio (%)')
     plt.xlabel('Minutes')
+    plt.legend(loc='upper right')
+    plt.xlim(4000,14000)
 
     f = plt.figure()
     plt.plot(mean_performance, marker='o')
     plt.plot(mean_performance2, marker='^')
+
+    print(mean_performance)
+    print(mean_performance2)
+
+    f = plt.figure()
+    plt.plot(reconf_cost, marker='o')
+    plt.plot(reconf_cost2, marker='^')
 
     plt.show()
