@@ -23,7 +23,7 @@ class gNodeB:
         self.uplink_ratio_maxlen = 48 * 5 + 12 * 8
         self.uplink_ratio_track = deque(maxlen=self.uplink_ratio_maxlen)
 
-        self.tdd_configuration = [1,1,1,1,1,1,1,0,0,0]
+        self.tdd_configuration = [1,1,1,1,1,1,0,0,0,0]
 
         self.n_cell = N_Cell
         self.cell_list = []
@@ -39,10 +39,10 @@ class gNodeB:
         self.mobile_activity_down = pd.DataFrame({})
         self.mobile_activity_up = pd.DataFrame({})
         if os.path.exists('down_sms.pkl'):
-            self.mobile_activity_down = pd.read_pickle('down_sms.pkl')
+            self.mobile_activity_down = pd.read_pickle('down_sms.pkl')[-1500:]
 
         if os.path.exists('up_sms.pkl'):
-            self.mobile_activity_up = pd.read_pickle('up_sms.pkl')
+            self.mobile_activity_up = pd.read_pickle('up_sms.pkl')[-1500:]
 
         if os.path.exists('crnn_model'):
             self.crnn_model = tf.keras.models.load_model('crnn_model')
@@ -400,28 +400,78 @@ if __name__ == '__main__':
         mean_performance2.append(perf_improve)
         reconf_cost2.append(reconf_cnt * reconf_resp_delay)
 
-    f = plt.figure()
-    plt.plot(minutes, avg_data(ulratio_history, 0.95), label='Actual')
-    plt.plot(pre_minutes, avg_data(pre_ulratio_history, 0.95), linestyle='--', color='r', label='ConvLSTM')
-    plt.plot(pre_minutes, avg_data(pre_ulratio_history_lstm, 0.95),linestyle='-.', color='g', alpha=0.8, label='LSTM')
+    f, ax = plt.subplots()
+    plt.plot(np.subtract(minutes, 4000), avg_data(np.multiply(ulratio_history, 100), 0.95), label='Actual')
+    plt.plot(np.subtract(pre_minutes, 4000), avg_data(np.multiply(pre_ulratio_history, 100), 0.95), linestyle='--', color='r', label='ConvLSTM')
+    plt.plot(np.subtract(pre_minutes, 4000), avg_data(np.multiply(pre_ulratio_history_lstm, 100), 0.95),linestyle='-.', color='g', alpha=0.8, label='LSTM')
     plt.ylabel('Uplink traffic ratio (%)')
     plt.xlabel('Minutes')
     plt.legend(loc='upper right')
-    plt.xlim(4000,14000)
+    plt.ylim(25,70)
+    plt.xlim(0,11000)
+    plt.grid()
+
+    for axis in ['top', 'bottom', 'left', 'right']:
+        ax.spines[axis].set_linewidth(1)
+
+    # lines = [Line2D([0], [0], color='darkorange', linewidth=6, linestyle='-', label='CoRe-GAN'),
+    #          Line2D([0], [0], linewidth=6, linestyle='-', label='ConvLSTM'),
+    #          Line2D([0], [0], color='forestgreen', linewidth=6, linestyle='-', label='Ground truth')]
+    # plt.legend(handles=lines, bbox_to_anchor=(-0.013, 1, 1.026, 0), loc='lower left', mode='expand', ncol=3, fontsize=28)
+    # plt.legend(loc='best', fontsize=28, ncol=3) #범례 위치와 폰트 사이즈
+    path_ = "./Results/"
+    if not os.path.exists(path_):
+        os.makedirs(path_)
+
+    plt.savefig(
+        path_ + "predict_compare.pdf",
+        edgecolor="white",
+        bbox_inches="tight",
+        pad_inches=0,
+    )
+
 
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
 
-    ax1.plot(np.multiply(tdd_interval_list,10), mean_performance, marker='o',)
+    ax1.plot(np.floor_divide(tdd_interval_list,6), mean_performance, marker='o',)
+    #ax1.set_zorder(2)
 
-    ax2.bar(np.multiply(tdd_interval_list,10), reconf_cost, color='slategray',  width=30,label='Network cost')
+    ax2.bar(np.floor_divide(tdd_interval_list,6), reconf_cost, color='steelblue', alpha=0.7,  width=0.8,label='Network cost')
     #ax2.plot(reconf_cost2, marker='^')
+    #ax2.set_zorder(1)
 
     ax1.legend(loc='upper left', labels=['UL 0-25%','UL 25-50%','UL 50-75%','UL 75-100%'])
     ax2.legend(loc='upper right')
-    ax2.set_xlabel('Dynamic TDD Interval (minutes)')
+    ax1.set_xlabel('Dynamic TDD Interval (hours)')
     ax1.set_ylabel('Throughput Improvement (%)')
     ax2.set_ylabel('Network Halt Delay (ms/hour)')
-    ax1.set_xticks(np.multiply(tdd_interval_list,10))
+    ax1.set_xticks(np.floor_divide(tdd_interval_list,6))
+    ax1.set_ylim(-3,15)
+    ax2.set_ylim(0,80)
 
+    ax1.set_zorder(1)  # default zorder is 0 for ax1 and ax2
+    ax1.patch.set_visible(False)  # prevents ax1 from hiding ax2
+
+    ax1.grid()
+
+    for axis in ['top', 'bottom', 'left', 'right']:
+        ax1.spines[axis].set_linewidth(1)
+        ax2.spines[axis].set_linewidth(1)
+
+    # lines = [Line2D([0], [0], color='darkorange', linewidth=6, linestyle='-', label='CoRe-GAN'),
+    #          Line2D([0], [0], linewidth=6, linestyle='-', label='ConvLSTM'),
+    #          Line2D([0], [0], color='forestgreen', linewidth=6, linestyle='-', label='Ground truth')]
+    # plt.legend(handles=lines, bbox_to_anchor=(-0.013, 1, 1.026, 0), loc='lower left', mode='expand', ncol=3, fontsize=28)
+    # plt.legend(loc='best', fontsize=28, ncol=3) #범례 위치와 폰트 사이즈
+    path_ = "./Results/"
+    if not os.path.exists(path_):
+        os.makedirs(path_)
+
+    plt.savefig(
+        path_ + "interval_compare.pdf",
+        edgecolor="white",
+        bbox_inches="tight",
+        pad_inches=0,
+    )
     plt.show()
